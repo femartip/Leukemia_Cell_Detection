@@ -1,4 +1,5 @@
 MedSAM/
-models/
+models/*
 STU-Net/
-data/Caso_1.svs
+data/
+resources/
