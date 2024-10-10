@@ -93,22 +93,23 @@ MODEL_TYPE = "vit_h"
 sam = sam_model_registry[MODEL_TYPE](checkpoint="./models/sam_vit_h_4b8939.pth")
 sam.to(DEVICE)
 
+dir_path = "./data/images/256_stride/"
 
 images = []
 images_names = []
 image_coordinates = []
 
 print("Reading images")
-for file in os.listdir("./data/images/256/"):
+for file in os.listdir(dir_path):
     if file.endswith(".png"):
         images_names.append(str(file))
-        image_bgr = cv2.imread(os.path.join("./data/images/256/", file))
-        x,y = read_image_metadata(os.path.join("./data/images/256/", file))
+        image_bgr = cv2.imread(os.path.join(dir_path, file))
+        x,y = read_image_metadata(os.path.join(dir_path, file))
         images.append(image_bgr)
         image_coordinates.append((x, y))
 
 mask_generator = SamAutomaticMaskGenerator(sam)
-mask_predictor = SamPredictor(sam)
+#mask_predictor = SamPredictor(sam)
 
 classifier_model = get_model()
 classifier_model.load_state_dict(torch.load("./models/bin_mask_classifier.pth"))

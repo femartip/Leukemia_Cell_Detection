@@ -1,43 +1,57 @@
 import openslide
 import os
 import numpy as np
-from PIL import Image, PngImagePlugin
+from PIL import Image, PngImagePlugin, ImageOps
+import argparse
 
-#Extract patches from a svs file
-
-def extract_images_from_svs(svs_file, output_dir):
+# Extract patches from an SVS file with padding and stride
+def extract_images_from_svs(svs_file, output_dir, patch_size, stride):
     # Open the svs file
     slide = openslide.OpenSlide(svs_file)
 
     # Get the dimensions of the slide
     width, height = slide.dimensions
 
-    # Define the size of each extracted image
-    patch_size = 256
+    # Automatically calculate padding based on stride
+    if stride < patch_size:
+        padding = (patch_size - stride) // 2
+    else:
+        padding = 0
 
-    # Calculate the number of images in each dimension
-    num_images_x = width // patch_size
-    num_images_y = height // patch_size
+    # Apply padding to the slide if required
+    if padding > 0:
+        padded_width = width + 2 * padding
+        padded_height = height + 2 * padding
+    else:
+        padded_width, padded_height = width, height
 
-    print(f"Extracting {num_images_x * num_images_y} images")
-    
+    # Calculate the number of images to extract in each dimension with stride and padding
+    num_images_x = (padded_width - patch_size) // stride + 1
+    num_images_y = (padded_height - patch_size) // stride + 1
+
+    print(f"Extracting {num_images_x * num_images_y} images with patch size {patch_size}, stride {stride}, and padding {padding}")
+
     # Loop over the slide to extract images
     for i in range(num_images_x):
         for j in range(num_images_y):
-            # Calculate the position of the current image
-            x = i * patch_size
-            y = j * patch_size
+            # Calculate the position of the current image, considering padding
+            x = i * stride - padding
+            y = j * stride - padding
 
-            # Extract the image
-            img = slide.read_region((x, y), 0, (patch_size, patch_size))
+            # Read the image region from the slide
+            img = slide.read_region((max(0, x), max(0, y)), 0, (patch_size, patch_size))
+
+            # If padding goes beyond the original image, fill the extra area
+            if padding > 0:
+                img = ImageOps.expand(img, border=(max(0, -x), max(0, -y), max(0, x + patch_size - width), max(0, y + patch_size - height)), fill='white')
 
             # Convert the image to a numpy array
             img_array = np.array(img)
-            #print(np.mean(img_array))
-            # Check if the image is completely white
+            
+            # Check if the image is completely white (or close)
             if np.mean(img_array) > 240:
-                print(f"Skipping image {i}_{j}")
-                # If the image is completely white, skip it
+                print(f"Skipping image {i}_{j} (mostly white)")
+                # If the image is mostly white, skip it
                 continue
             
             print(f"Saving image {i}_{j}")
@@ -47,18 +61,33 @@ def extract_images_from_svs(svs_file, output_dir):
             metadata.add_text("x", str(x))
             metadata.add_text("y", str(y))
 
-            # Convert the image to 8-bit
+            # Convert the image to 8-bit and save
             img = img.convert("RGB")
             img = img.convert("P", palette=Image.ADAPTIVE, colors=256)
-
-            # Save the image
             img.save(os.path.join(output_dir, f"image_{i}_{j}.png"), pnginfo=metadata)
 
     print(f"Extracted {num_images_x * num_images_y} images")
+
+# Define the argument parser
+def parse_args():
+    parser = argparse.ArgumentParser(description="Extract patches from an SVS file")
     
-output_dir = "./data/images/256_all"
-#output_dir = "./data/256"
-if not os.path.exists(output_dir):
-    os.mkdir(output_dir)
-svs_file = "./data/Caso_1.svs"
-extract_images_from_svs(svs_file, output_dir)
+    # Arguments for image path, patch size, stride, and output directory
+    parser.add_argument('svs_file', type=str, help='Path to the input SVS file')
+    parser.add_argument('output_dir', type=str, help='Directory to save the extracted images')
+    parser.add_argument('--patch_size', type=int, default=256, help='Size of each patch (default: 256)')
+    parser.add_argument('--stride', type=int, default=256, help='Stride between patches (default: 256)')
+    
+    return parser.parse_args()
+
+# Main function
+if __name__ == "__main__":
+    # Parse command-line arguments
+    args = parse_args()
+
+    # Create output directory if it doesn't exist
+    if not os.path.exists(args.output_dir):
+        os.mkdir(args.output_dir)
+
+    # Extract images from the SVS file
+    extract_images_from_svs(args.svs_file, args.output_dir, args.patch_size, args.stride)
