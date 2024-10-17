@@ -10,11 +10,10 @@ import json
 from copy import deepcopy
 import logging
 import argparse
-from shapely.geometry import Polygon
-from shapely.ops import unary_union
+import time
+import merge_overlapping_polygons
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-MODEL_TYPE = "vit_h"
 
 def get_model():
     num_classes = 1
@@ -30,7 +29,6 @@ def get_model():
         nn.Sigmoid()
     )
     return model
-
 
 def area_of_mask(mask):
     return np.sum(mask)
@@ -91,68 +89,11 @@ def mask_to_polygons(mask, coords):
         mask_polygons.append(polygon)
     return mask_polygons
 
-from shapely.geometry import Polygon, MultiPolygon
-
-def merge_overlapping_polygons(geojson):
-    features = geojson['features']
-    merged_features = []
-    
-    # Iterate over all polygons and merge overlapping ones
-    while features:
-        current = features.pop(0)
-        current_poly = Polygon(current['geometry']['coordinates'][0])
-        current_class = current['properties']['classification']['name']
-        current_area = current_poly.area
-        overlap_found = False
-        
-        for i, other in enumerate(features):
-            other_poly = Polygon(other['geometry']['coordinates'][0])
-            other_class = other['properties']['classification']['name']
-            
-            # Check for overlap
-            if current_poly.intersects(other_poly):
-                overlap_found = True
-                merged_poly = current_poly.union(other_poly)
-                
-                # Retain the class of the larger polygon
-                if other_poly.area > current_area:
-                    current_class = other_class
-                
-                # Update current polygon
-                current_poly = merged_poly
-                current_area = merged_poly.area
-                
-                # Remove the other polygon from the list
-                features.pop(i)
-                break
-        
-        # Handle both Polygon and MultiPolygon cases
-        if isinstance(current_poly, Polygon):
-            merged_feature = deepcopy(current)
-            merged_feature['geometry']['coordinates'] = [list(current_poly.exterior.coords)]
-            merged_feature['properties']['classification']['name'] = current_class
-            merged_features.append(merged_feature)
-        elif isinstance(current_poly, MultiPolygon):
-            # Use .geoms to iterate over the individual polygons
-            for poly in current_poly.geoms:
-                merged_feature = deepcopy(current)
-                merged_feature['geometry']['coordinates'] = [list(poly.exterior.coords)]
-                merged_feature['properties']['classification']['name'] = current_class
-                merged_features.append(merged_feature)
-        
-        if overlap_found:
-            # Push back the merged feature to check for further overlaps
-            features.insert(0, merged_feature)
-    
-    return merged_features
-
-def main(dir_path, model_type="vit_h"):
+def main(dir_path, model_type="vit_h", num_images=None):
     if model_type == "vit_b":
-        sam = sam_model_registry[MODEL_TYPE](checkpoint="./models/sam_vit_b_01ec64.pth")
+        sam = sam_model_registry[model_type](checkpoint="./models/sam_vit_b_01ec64.pth")
     elif model_type == "vit_h":
-        sam = sam_model_registry[MODEL_TYPE](checkpoint="./models/sam_vit_h_4b8939.pth")
-    elif model_type == "medsam_vit_b":
-        sam = sam_model_registry["vit_b"](checkpoint="./models/medsam_vit_b.pth")
+        sam = sam_model_registry[model_type](checkpoint="./models/sam_vit_h_4b8939.pth")
     else:
         raise ValueError(f"Model type {model_type} not supported")
     sam.to(DEVICE)
@@ -194,10 +135,13 @@ def main(dir_path, model_type="vit_h"):
         "features": []
     }
 
-    max_img = 1000
+    if not num_images:
+        max_img = len(images)
+    else:
+        max_img = num_images
 
     logging.info("Generating masks")
-    #for i in range(len(images)) :
+
     for i in range(max_img):
         image = images[i]
         masks = mask_generator.generate(image)
@@ -230,10 +174,16 @@ def main(dir_path, model_type="vit_h"):
         cv2.imwrite(f"./data/masks/{images_names[i]}", masked_image)
         logging.info(f"Image {images_names[i]} processed")
 
-    logging.info("Merging overlapping polygons")
-    geojson = merge_overlapping_polygons(geojson)
-
     logging.info("Saving geojson")
+    out_file = open('data/annotations.geojson', 'w')
+    json.dump(geojson, out_file, indent=4)
+    out_file.close()
+
+    logging.info("Merging overlapping polygons")
+    with open('data/annotations.geojson') as f:
+        geojson = json.load(f)
+    merged_features = merge_overlapping_polygons.merge_overlapping_polygons(geojson)
+    geojson['features'] = merged_features
     out_file = open('data/annotations.geojson', 'w')
     json.dump(geojson, out_file, indent=4)
     out_file.close()
@@ -246,6 +196,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract images from a directory, generate masks and classify them. Results are saved in a geojson file so that they can be loaded to qupath")
     parser.add_argument('dir_path', type=str, help='Path to the input images directory')
     parser.add_argument('--model_type', type=str, default="vit_h", help='Type of model to use (default: vit_h)')
+    parser.add_argument('--num_images', type=int, help='Number of images to process (default: 500)')
     args = parser.parse_args()
 
-    main(args.dir_path, args.model_type)
+    init_time = time.time()
+
+    main(args.dir_path, args.model_type, args.num_images)
+
+    end_time = time.time()
+    logging.info(f"Total time: {(end_time - init_time)/3600} hours")
