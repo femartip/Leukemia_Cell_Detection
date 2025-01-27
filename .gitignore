@@ -1,5 +1,5 @@
-MedSAM/
+MedSAM
 models/*
-STU-Net/
-data/
-resources/
+STU-Net
+data
+resources

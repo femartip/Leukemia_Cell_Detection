@@ -7,7 +7,7 @@ import argparse
 # Extract patches from an SVS file with padding and stride
 def extract_images_from_svs(svs_file, output_dir, patch_size, stride):
     # Open the svs file
-    slide = openslide.OpenSlide(svs_file)
+    slide = openslide.OpenSlide(    )
 
     # Get the dimensions of the slide
     width, height = slide.dimensions

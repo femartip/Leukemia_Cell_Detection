@@ -29,7 +29,7 @@ def get_model():
         nn.Sigmoid()
     )
     return model
-
+    
 def area_of_mask(mask):
     return np.sum(mask)
 
