@@ -3,3 +3,6 @@ models/*
 STU-Net
 data
 resources
+*.png
+*.geojson
+*.sh
