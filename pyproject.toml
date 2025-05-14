@@ -1,0 +1,31 @@
+[project]
+name = "leukemia-cell-detection"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "femartip",email = "felix.marti99@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "opencv-python (>=4.11.0.86,<5.0.0.0)",
+    "pillow (>=11.2.1,<12.0.0)",
+    "segment-anything @ git+https://github.com/facebookresearch/segment-anything.git",
+    "scikit-learn (>=1.6.1,<2.0.0)",
+    "torch (>=2.7.0,<3.0.0)",
+    "torchvision (>=0.22.0,<0.23.0)",
+    "torchaudio (>=2.7.0,<3.0.0)",
+    "pandas (>=2.2.3,<3.0.0)",
+    "scipy (>=1.15.3,<2.0.0)",
+    "matplotlib (>=3.10.3,<4.0.0)",
+    "transformers (>=4.51.3,<5.0.0)",
+    "tqdm (>=4.67.1,<5.0.0)",
+    "monai (>=1.4.0,<2.0.0)",
+    "pycocotools (>=2.0.8,<3.0.0)",
+    "torchmetrics (>=1.7.1,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
